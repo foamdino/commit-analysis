@@ -7,24 +7,24 @@ extern crate serde_derive;
 extern crate serde_json;
 
 use std::str;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::fs;
+use std::time::Instant;
 
 use regex::Regex;
 
 use git2::{Repository, Error, DiffFormat, DiffDelta, DiffHunk, DiffLine, DiffOptions, Diff, Deltas};
 use docopt::Docopt;
 use rayon::prelude::*;
-use rayon::collections::*;
-use std::collections::vec_deque::VecDeque;
+use core::borrow::Borrow;
 
 #[derive(Debug, Deserialize, Serialize)]
 struct Stats {
     num_commits_to_master: i32,
     num_prs: i32,
     num_files: i32,
-    component_stats: HashMap<String, i32>,
-    lang_stats: HashMap<String, i32>
+    component_stats: BTreeMap<String, i32>,
+    lang_stats: BTreeMap<String, i32>
 }
 
 fn extract_pr_from_commit_message(commit_message: &str) -> Option<&str> {
@@ -59,8 +59,10 @@ fn walk_entire_history(git_repo_path: &str) -> Result<Stats, Error> {
     let mut revwalk = repo.revwalk()?;
     revwalk.push_head()?;
 
-    let mut lang_map: HashMap<String, i32> = HashMap::new();
-    let mut component_map: HashMap<String, i32> = HashMap::new();
+    let mut lang_map: BTreeMap<String, i32> = BTreeMap::new();
+    let mut component_map: BTreeMap<String, i32> = BTreeMap::new();
+
+    let before_revwalk = Instant::now();
 
     // create list of diffs we're interested in
     let diffs: Vec<Diff> = revwalk.map(|step| {
@@ -77,95 +79,51 @@ fn walk_entire_history(git_repo_path: &str) -> Result<Stats, Error> {
         diff
     }).collect();
 
+    let after_revwalk = Instant::now();
+    println!("Revwalk time: {}", after_revwalk.duration_since(before_revwalk).as_secs());
+
     let num_files = diffs.iter().map(|diff| {
         diff.deltas().len() as i32
     }).sum();
 
-    //TODO make this work...
-//    let diff_deltas: Vec<DiffDelta> = diffs.iter().map(|diff| {
-//       diff.deltas().filter(|dl| {!dl.new_file().path().unwrap().starts_with("master")})
-//    }).collect();
+    let before_diffs = Instant::now();
 
-//    diffs.iter().for_each(|diff| {
-//        diff.deltas().filter(|p| { !p.new_file().path().unwrap().starts_with("master")}).for_each(|dd| {
-//            let file_name = dd.new_file().path().unwrap().to_str().unwrap().to_owned();
-//            println!("{}", file_name);
-//            let cn = extract_component_name_from_diff_summary(&file_name).unwrap_or("unknown".to_owned());
-//            let comp_count = component_map.entry(cn).or_insert(1);
-//            *comp_count += 1;
-//
-//            let ln = extract_language_from_diff_summary(&file_name).unwrap_or("unknown".to_owned());
-//            let lang_count = lang_map.entry(ln).or_insert(1);
-//            *lang_count += 1;
-//        });
-//    });
+    let mut diff_deltas = vec![];
+    for diff in &diffs {
+        let ds = diff.deltas();
+        for d in ds {
+            let file_name = d.new_file().path().unwrap().to_str().unwrap().to_owned();
+            if !file_name.starts_with("master") {
+                diff_deltas.push(file_name);
+            }
+        }
+    }
 
-//    for diff in diffs {
-//        for dd in diff.deltas() {
-//            let file_name = dd.new_file().path().unwrap().to_str().unwrap().to_owned();
-//            let cn = extract_component_name_from_diff_summary(&file_name).unwrap_or("unknown".to_owned());
-//            let comp_count = component_map.entry(cn).or_insert(1);
-//            *comp_count += 1;
-//
-//            let ln = extract_language_from_diff_summary(&file_name).unwrap_or("unknown".to_owned());
-//            let lang_count = lang_map.entry(ln).or_insert(1);
-//            *lang_count += 1;
-//        }
-//    }
-
-//    diffs.iter().map(|diff| {
-//        diff.deltas().for_each(|dd| {
-//            let file_name = dd.new_file().path().unwrap().to_str().unwrap().to_owned();
-//            let cn = extract_component_name_from_diff_summary(&file_name).unwrap_or("unknown".to_owned());
-//            let comp_count = component_map.entry(cn).or_insert(1);
-//            *comp_count += 1;
-//
-//            let ln = extract_language_from_diff_summary(&file_name).unwrap_or("unknown".to_owned());
-//            let lang_count = lang_map.entry(ln).or_insert(1);
-//            *lang_count += 1;
-//        })
-//    });
-
+    let after_diffs = Instant::now();
+    println!("Creating diff vec: {}", after_diffs.duration_since(before_diffs).as_secs());
 
     // count the component_names and languages used
-//    for dd in diff_deltas {
-//        let file_name = dd.new_file().path().unwrap().to_str().unwrap().to_owned();
-//        let cn = extract_component_name_from_diff_summary(&file_name).unwrap_or("unknown".to_owned());
-//        let comp_count = component_map.entry(cn).or_insert(1);
-//        *comp_count += 1;
-//
-//        let ln = extract_language_from_diff_summary(&file_name).unwrap_or("unknown".to_owned());
-//        let lang_count = lang_map.entry(ln).or_insert(1);
-//        *lang_count += 1;
-//    }
+    let before_counts = Instant::now();
+    let component_name_occurrences: Vec<String> = diff_deltas.par_iter().map(|file_name| {
+        let cn = extract_component_name_from_diff_summary(&file_name).unwrap_or("unknown".to_owned());
+        cn
+    }).collect();
 
+    let lang_name_occurrences: Vec<String> = diff_deltas.par_iter().map(|file_name| {
+        let ln = extract_language_from_diff_summary(&file_name).unwrap_or("unknown".to_owned());
+        ln
+    }).collect();
 
-//    for r in revwalk {
-//        let oid = r?;
-//        let commit = repo.find_commit(oid)?;
-////        println!("{:?}",commit);
-////        println!("{}", commit.raw_header().unwrap());
-//
-//        let a = if commit.parents().len() == 1 {
-//            let parent = commit.parent(0)?;
-//            Some(parent.tree()?)
-//        } else {
-//            None
-//        };
-//        let b = commit.tree()?;
-//        let diff = repo.diff_tree_to_tree(a.as_ref(), Some(&b), None)?;
-//        num_files += diff.deltas().len() as i32;
-//        for dd in diff.deltas() {
-//            let file_name = dd.new_file().path().unwrap().to_str().unwrap().to_owned();
-//            let cn = extract_component_name_from_diff_summary(&file_name).unwrap_or("unknown".to_owned());
-//            let comp_count = component_map.entry(cn).or_insert(1);
-//            *comp_count += 1;
-//
-//            let ln = extract_language_from_diff_summary(&file_name).unwrap_or("unknown".to_owned());
-//            let lang_count = lang_map.entry(ln).or_insert(1);
-//            *lang_count += 1;
-//        }
-//    }
+    for comp_name in component_name_occurrences {
+        *component_map.entry(comp_name).or_insert(0) += 1;
+    }
+
+    for lang_name in lang_name_occurrences {
+        *lang_map.entry(lang_name).or_insert(0) += 1;
+    }
+
+    let after_counts = Instant::now();
+    println!("Processing counts: {}", after_counts.duration_since(before_counts).as_secs());
 
     revwalk = repo.revwalk()?;
     revwalk.push_head()?;
@@ -189,7 +147,6 @@ fn walk_entire_history(git_repo_path: &str) -> Result<Stats, Error> {
     }).sum();
 
     println!("total commits to master: {}", num_commits);
-//    println!("{:?}", Stats{num_commits_to_master: num_commits, num_prs: num_prs, num_files: num_files, component_stats: HashMap::new(), lang_stats: HashMap::new()});
 
     Ok(Stats{num_commits_to_master: num_commits, num_prs: num_prs, num_files: num_files, component_stats: component_map, lang_stats: lang_map})
 }
@@ -215,7 +172,7 @@ mod tests {
 
     #[test]
     fn test_walk_entire_history() {
-        let r = walk_entire_history("/Users/kevj/projects/voyager");
+        let r = walk_entire_history("/Users/jacksonke/projects/voyager");
         assert!(r.is_ok());
 //        let num_commits = r.unwrap().num_commits_to_master;
 //        assert!(num_commits > 0);
