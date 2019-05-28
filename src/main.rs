@@ -10,6 +10,7 @@ use std::str;
 use std::collections::BTreeMap;
 use std::fs;
 use std::time::Instant;
+use std::thread;
 
 use regex::Regex;
 
@@ -58,9 +59,6 @@ fn walk_entire_history(git_repo_path: &str) -> Result<Stats, Error> {
     let repo = Repository::open(git_repo_path)?;
     let mut revwalk = repo.revwalk()?;
     revwalk.push_head()?;
-
-    let mut lang_map: BTreeMap<String, i32> = BTreeMap::new();
-    let mut component_map: BTreeMap<String, i32> = BTreeMap::new();
 
     let before_revwalk = Instant::now();
 
@@ -114,13 +112,24 @@ fn walk_entire_history(git_repo_path: &str) -> Result<Stats, Error> {
         ln
     }).collect();
 
-    for comp_name in component_name_occurrences {
-        *component_map.entry(comp_name).or_insert(0) += 1;
-    }
+    let comp_name_thread = thread::spawn(|| {
+        let mut component_map: BTreeMap<String, i32> = BTreeMap::new();
+        for comp_name in component_name_occurrences {
+            *component_map.entry(comp_name).or_insert(0) += 1;
+        }
+        component_map
+    });
 
-    for lang_name in lang_name_occurrences {
-        *lang_map.entry(lang_name).or_insert(0) += 1;
-    }
+    let lang_name_thread = thread::spawn( || {
+        let mut lang_map: BTreeMap<String, i32> = BTreeMap::new();
+        for lang_name in lang_name_occurrences {
+            *lang_map.entry(lang_name).or_insert(0) += 1;
+        }
+        lang_map
+    });
+
+    let component_map = comp_name_thread.join().unwrap();
+    let lang_map = lang_name_thread.join().unwrap();
 
     let after_counts = Instant::now();
     println!("Processing counts: {}", after_counts.duration_since(before_counts).as_secs());
