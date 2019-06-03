@@ -14,10 +14,9 @@ use std::thread;
 
 use regex::Regex;
 
-use git2::{Repository, Error, DiffFormat, DiffDelta, DiffHunk, DiffLine, DiffOptions, Diff, Deltas};
+use git2::{Repository, Error, Diff};
 use docopt::Docopt;
 use rayon::prelude::*;
-use core::borrow::Borrow;
 
 #[derive(Debug, Deserialize, Serialize)]
 struct Stats {
@@ -37,7 +36,7 @@ fn extract_pr_from_commit_message(commit_message: &str) -> Option<&str> {
     })
 }
 
-fn extract_component_name_from_diff_summary(filename: &String) -> Option<String> {
+fn extract_component_name_from_diff_summary(filename: &str) -> Option<String> {
     lazy_static! {
         static ref CN_RE: Regex = Regex::new(r"([\w-]+)/.+").unwrap();
     }
@@ -46,7 +45,7 @@ fn extract_component_name_from_diff_summary(filename: &String) -> Option<String>
     })
 }
 
-fn extract_language_from_diff_summary(filename: &String) -> Option<String> {
+fn extract_language_from_diff_summary(filename: &str) -> Option<String> {
     lazy_static! {
         static ref LANG_RE: Regex = Regex::new(r"\.(\w+)$").unwrap();
     }
@@ -73,8 +72,7 @@ fn walk_entire_history(git_repo_path: &str) -> Result<Stats, Error> {
             None
         };
         let b = commit.tree().unwrap();
-        let diff = repo.diff_tree_to_tree(a.as_ref(), Some(&b), None).unwrap();
-        diff
+        repo.diff_tree_to_tree(a.as_ref(), Some(&b), None).unwrap()
     }).collect();
 
     let after_revwalk = Instant::now();
@@ -103,13 +101,11 @@ fn walk_entire_history(git_repo_path: &str) -> Result<Stats, Error> {
     // count the component_names and languages used
     let before_counts = Instant::now();
     let component_name_occurrences: Vec<String> = diff_deltas.par_iter().map(|file_name| {
-        let cn = extract_component_name_from_diff_summary(&file_name).unwrap_or("unknown".to_owned());
-        cn
+        extract_component_name_from_diff_summary(&file_name).unwrap_or("unknown".to_owned())
     }).collect();
 
     let lang_name_occurrences: Vec<String> = diff_deltas.par_iter().map(|file_name| {
-        let ln = extract_language_from_diff_summary(&file_name).unwrap_or("unknown".to_owned());
-        ln
+        extract_language_from_diff_summary(&file_name).unwrap_or("unknown".to_owned())
     }).collect();
 
     let comp_name_thread = thread::spawn(|| {
