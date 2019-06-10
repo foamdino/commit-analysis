@@ -5,6 +5,7 @@ extern crate lazy_static;
 #[macro_use]
 extern crate serde_derive;
 extern crate serde_json;
+extern crate chrono;
 
 use std::str;
 use std::collections::BTreeMap;
@@ -14,9 +15,11 @@ use std::thread;
 
 use regex::Regex;
 
-use git2::{Repository, Error, Diff};
+use git2::{Repository, Error, Diff, Time};
 use docopt::Docopt;
 use rayon::prelude::*;
+use chrono::{DateTime, Utc, Datelike};
+use chrono::offset::TimeZone;
 
 #[derive(Debug, Deserialize, Serialize)]
 struct Stats {
@@ -24,7 +27,8 @@ struct Stats {
     num_prs: i32,
     num_files: i32,
     component_stats: BTreeMap<String, i32>,
-    lang_stats: BTreeMap<String, i32>
+    lang_stats: BTreeMap<String, i32>,
+    commits_by_month: BTreeMap<String, Vec<i32>>
 }
 
 fn extract_pr_from_commit_message(commit_message: &str) -> Option<&str> {
@@ -54,6 +58,10 @@ fn extract_language_from_diff_summary(filename: &str) -> Option<String> {
     })
 }
 
+fn convert_git_time_to_datetime(git_time: &Time) -> DateTime<Utc> {
+    Utc.timestamp(git_time.seconds() + i64::from(git_time.offset_minutes()) * 60, 0)
+}
+
 fn walk_entire_history(git_repo_path: &str) -> Result<Stats, Error> {
     let repo = Repository::open(git_repo_path)?;
     let mut revwalk = repo.revwalk()?;
@@ -61,10 +69,20 @@ fn walk_entire_history(git_repo_path: &str) -> Result<Stats, Error> {
 
     let before_revwalk = Instant::now();
 
+    let mut commits_by_month: BTreeMap<String, Vec<i32>> = BTreeMap::new();
+
     // create list of diffs we're interested in
     let diffs: Vec<Diff> = revwalk.map(|step| {
         let oid = step.unwrap();
         let commit = repo.find_commit(oid).unwrap();
+
+        // record changes by time
+        let dt = convert_git_time_to_datetime(&commit.author().when());
+        let year = format!("{}", dt.year());
+        let month = (dt.month() - 1) as usize;
+        let month_vec = commits_by_month.entry(year).or_insert(vec![0; 12]);
+        month_vec[month] += 1;
+
         let a = if commit.parents().len() == 1 {
             let parent = commit.parent(0).unwrap();
             Some(parent.tree().unwrap())
@@ -101,11 +119,11 @@ fn walk_entire_history(git_repo_path: &str) -> Result<Stats, Error> {
     // count the component_names and languages used
     let before_counts = Instant::now();
     let component_name_occurrences: Vec<String> = diff_deltas.par_iter().map(|file_name| {
-        extract_component_name_from_diff_summary(&file_name).unwrap_or("unknown".to_owned())
+        extract_component_name_from_diff_summary(&file_name).unwrap_or_else(|| "unknown".to_owned())
     }).collect();
 
     let lang_name_occurrences: Vec<String> = diff_deltas.par_iter().map(|file_name| {
-        extract_language_from_diff_summary(&file_name).unwrap_or("unknown".to_owned())
+        extract_language_from_diff_summary(&file_name).unwrap_or_else(|| "unknown".to_owned())
     }).collect();
 
     let comp_name_thread = thread::spawn(|| {
@@ -153,7 +171,7 @@ fn walk_entire_history(git_repo_path: &str) -> Result<Stats, Error> {
 
     println!("total commits to master: {}", num_commits);
 
-    Ok(Stats{num_commits_to_master: num_commits, num_prs: num_prs, num_files: num_files, component_stats: component_map, lang_stats: lang_map})
+    Ok(Stats{num_commits_to_master: num_commits, num_prs: num_prs, num_files: num_files, component_stats: component_map, lang_stats: lang_map, commits_by_month: commits_by_month})
 }
 
 fn main() {
@@ -203,5 +221,10 @@ mod tests {
         let r = extract_language_from_diff_summary(&"voyager-workflow-manager/src/test/java/com/thehutgroup/voyager/workflow/domain/kitting/RestKittingRegistrationServiceTest.java".to_owned());
         assert!(r.is_some());
         assert_eq!(r.unwrap(), "java");
+    }
+
+    #[test]
+    fn test_convert_git_time_to_datetime() {
+
     }
 }
