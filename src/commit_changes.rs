@@ -1,22 +1,16 @@
-//#[macro_use]
-//extern crate serde_derive;
-
 use std::ops::{Add, AddAssign};
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Copy, Clone)]
 pub struct CommitChanges {
-    num_additions: i32,
-    num_deletions: i32,
+    files_added: u32,
+    files_deleted: u32,
+    files_modified: u32,
 }
 
 impl CommitChanges {
 
-    pub fn new(adds: i32, dels: i32) -> CommitChanges {
-        CommitChanges{num_additions: adds, num_deletions: dels}
-    }
-
-    pub fn get_num_deletions(&self) -> &i32 {
-        &self.num_deletions
+    pub const fn new(fa: u32, fd: u32, fm: u32) -> CommitChanges {
+        CommitChanges{files_added: fa, files_deleted: fd, files_modified: fm}
     }
 }
 
@@ -25,8 +19,9 @@ impl Add for CommitChanges {
 
     fn add(self, other: Self) -> Self {
         Self {
-            num_additions: self.num_additions + other.num_additions,
-            num_deletions: self.num_deletions + other.num_deletions
+            files_added: self.files_added + other.files_added,
+            files_deleted: self.files_added + other.files_deleted,
+            files_modified: self.files_modified + other.files_modified
         }
     }
 }
@@ -34,8 +29,9 @@ impl Add for CommitChanges {
 impl AddAssign for CommitChanges {
     fn add_assign(&mut self, other: CommitChanges) {
         *self = CommitChanges {
-            num_additions: self.num_additions + other.num_additions,
-            num_deletions: self.num_deletions + other.num_deletions
+            files_added: self.files_added + other.files_added,
+            files_deleted: self.files_added + other.files_deleted,
+            files_modified: self.files_modified + other.files_modified
         }
     }
 }
