@@ -131,28 +131,28 @@ fn manipulate_hashmap(mm: &mut HashMap<String, u32>, cn: String) {
 
 fn bench_extract_component_name_from_diff_summary(c: &mut Criterion) {
     c.bench_function("extract component name",
-                     |b| b.iter(|| extract_component_name_from_diff_summary(black_box(&"voyager-workflow-manager/src/test/java/com/thehutgroup/voyager/workflow/domain/kitting/RestKittingRegistrationServiceTest.java".to_owned()))));
+                     |b| b.iter(|| extract_component_name_from_diff_summary(black_box(&"component-a/src/test/java/Thing.java".to_owned()))));
 }
 
 fn bench_extract_component_name_from_diff_summary2(c: &mut Criterion) {
     c.bench_function("extract component name2",
-                     |b| b.iter(|| extract_component_name_from_diff_summary2(black_box(&"voyager-workflow-manager/src/test/java/com/thehutgroup/voyager/workflow/domain/kitting/RestKittingRegistrationServiceTest.java".to_owned()))));
+                     |b| b.iter(|| extract_component_name_from_diff_summary2(black_box(&"component-a/src/test/java/Thing.java".to_owned()))));
 }
 
 fn bench_extract_language_from_diff_summary(c: &mut Criterion) {
     c.bench_function("extract language",
-                     |b| b.iter(|| extract_language_from_diff_summary(black_box(&"voyager-workflow-manager/src/test/java/com/thehutgroup/voyager/workflow/domain/kitting/RestKittingRegistrationServiceTest.java".to_owned()))));
+                     |b| b.iter(|| extract_language_from_diff_summary(black_box(&"component-a/src/test/java/Thing.java".to_owned()))));
 }
 
 fn bench_extract_language_from_diff_summary2(c: &mut Criterion) {
     c.bench_function("extract language2",
-                     |b| b.iter(|| extract_language_from_diff_summary2(black_box(&"voyager-workflow-manager/src/test/java/com/thehutgroup/voyager/workflow/domain/kitting/RestKittingRegistrationServiceTest.java".to_owned()))));
+                     |b| b.iter(|| extract_language_from_diff_summary2(black_box(&"component-a/src/test/java/Thing.java".to_owned()))));
 }
 
 fn bench_hashmap(c: &mut Criterion) {
     let mut mm: HashMap<String, u32> = HashMap::new();
     c.bench_function("hashmap",
-                        move |b| b.iter(|| manipulate_hashmap(&mut mm, black_box("voyager-stock-management".to_owned()))));
+                        move |b| b.iter(|| manipulate_hashmap(&mut mm, black_box("component-b".to_owned()))));
 
 }
 
@@ -169,12 +169,12 @@ fn bench_revwalk(c: &mut Criterion) {
 
 fn bench_pr_from_commit_message_alternative(c: &mut Criterion) {
     c.bench_function("extract pr from commit message without lazy_static",
-                     |b| b.iter(|| extract_pr_from_commit_message_alternative(black_box(&"VGR-8087 - Adding tests for verifying required products service is decremented (#4729)"))));
+                     |b| b.iter(|| extract_pr_from_commit_message_alternative(black_box(&"VGR-XXXX - Lorem ipsum dolor sit amet, consectetur adipiscing elit. (#4729)"))));
 }
 
 fn bench_pr_from_commit_message(c: &mut Criterion) {
     c.bench_function("extract pr from commit message with lazy_static",
-                     |b| b.iter(|| commit_analysis::extract_pr_from_commit_message(black_box(&"VGR-8087 - Adding tests for verifying required products service is decremented (#4729)"))));
+                     |b| b.iter(|| commit_analysis::extract_pr_from_commit_message(black_box(&"VGR-XXXX - Lorem ipsum dolor sit amet, consectetur adipiscing elit. (#4729)"))));
 }
 
 fn bench_extract_names_and_sum_v1(c: &mut Criterion) {

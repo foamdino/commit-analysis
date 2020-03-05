@@ -13,21 +13,21 @@ fn test_walk_entire_history() {
 
 #[test]
 fn test_extract_component_name_from_diff_summary() {
-    let r = extract_component_name_from_filename(&"voyager-workflow-manager/src/test/java/com/thehutgroup/voyager/workflow/domain/kitting/RestKittingRegistrationServiceTest.java".to_owned());
+    let r = extract_component_name_from_filename(&"component-a/src/test/java/Thing.java".to_owned());
     assert!(r.is_some());
     assert_eq!(r.unwrap(), "voyager-workflow-manager");
 }
 
 #[test]
 fn test_extract_pr_from_commit_message() {
-    let message = "VGR-8087 - Adding tests for verifying required products service is decremented (#4729)";
+    let message = &"VGR-XXXX - Lorem ipsum dolor sit amet, consectetur adipiscing elit. (#4729)";
     let pr_number = extract_pr_from_commit_message(message);
     assert_eq!("4729", pr_number.unwrap());
 }
 
 #[test]
 fn test_extract_language_from_diff_summary() {
-    let r = extract_language_from_filename(&"voyager-workflow-manager/src/test/java/com/thehutgroup/voyager/workflow/domain/kitting/RestKittingRegistrationServiceTest.java".to_owned());
+    let r = extract_language_from_filename(&"component-a/src/test/java/Thing.java".to_owned());
     assert!(r.is_some());
     assert_eq!(r.unwrap(), "java");
 }
