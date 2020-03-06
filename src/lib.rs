@@ -93,14 +93,14 @@ pub fn walk_entire_history(git_repo_path: &str) -> Result<Stats, Error> {
     let mut changes_by_component: HashMap<String, CommitChanges> = HashMap::new();
     let mut component_name_occurrences: Vec<String> = vec![];
     let mut lang_name_occurrences: Vec<String> = vec![];
-    let mut num_files: u32 = 0;
-    let mut num_commits: u32 = 0;
+    let mut num_file_changes: u32 = 0;
+    let mut num_commits_to_master: u32 = 0;
 
     revwalk.for_each(|step| {
         let oid = step.unwrap();
         let commit = repo.find_commit(oid).unwrap();
 
-        if let Ok(_c) = repo.find_commit(oid) { num_commits += 1 }
+        if let Ok(_c) = repo.find_commit(oid) { num_commits_to_master += 1 }
 
         // record changes by time
         {
@@ -134,7 +134,7 @@ pub fn walk_entire_history(git_repo_path: &str) -> Result<Stats, Error> {
             let file_name = d.new_file().path().unwrap().to_str().unwrap().to_owned();
             // we should only consider files in the diff which are changes to the component code
             if !file_name.starts_with("master") && file_name.contains('/') {
-                num_files += 1;
+                num_file_changes += 1;
                 let comp_name= extract_component_name_from_filename(&file_name).unwrap_or_else(|| "unknown".to_owned());
                 let lang_name = extract_language_from_filename(&file_name).unwrap_or_else(|| "unknown".to_owned());
 
@@ -171,7 +171,7 @@ pub fn walk_entire_history(git_repo_path: &str) -> Result<Stats, Error> {
     let lang_name_thread = thread::spawn(move|| {
         lang_name_occurrences.iter().count_by_key(|l| l.to_owned().to_owned())
     });
-    let lang_map = lang_name_thread.join().unwrap();
+    let lang_stats = lang_name_thread.join().unwrap();
     let after_lang_map = Instant::now();
     println!("Lang names map creation time: {:?}", after_lang_map.duration_since(before_lang_map));
 
@@ -179,7 +179,7 @@ pub fn walk_entire_history(git_repo_path: &str) -> Result<Stats, Error> {
     let comp_name_thread = thread::spawn(move|| {
         component_name_occurrences.iter().count_by_key(|c| c.to_owned().to_owned())
     });
-    let component_map = comp_name_thread.join().unwrap();
+    let component_stats = comp_name_thread.join().unwrap();
     let after_comp_map = Instant::now();
     println!("Comp names map creation time: {:?}", after_comp_map.duration_since(before_comp_map));
 
@@ -197,11 +197,11 @@ pub fn walk_entire_history(git_repo_path: &str) -> Result<Stats, Error> {
         }
     }).sum();
 
-    Ok(Stats::new(num_commits,
+    Ok(Stats::new(num_commits_to_master,
                   num_prs,
-                  num_files,
-                  component_map,
-                  lang_map,
+                  num_file_changes,
+                  component_stats,
+                  lang_stats,
                   commits_by_month,
                   commits_by_day_of_week,
                   changes_by_component
