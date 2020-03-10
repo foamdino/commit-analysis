@@ -77,7 +77,7 @@ pub fn extract_language_from_filename(filename: &str) -> Option<String> {
     }
 }
 
-pub fn convert_git_time_to_datetime(git_time: &Time) -> DateTime<Utc> {
+fn convert_git_time_to_datetime(git_time: &Time) -> DateTime<Utc> {
     Utc.timestamp(git_time.seconds() + i64::from(git_time.offset_minutes()) * 60, 0)
 }
 
@@ -95,12 +95,17 @@ pub fn walk_entire_history(git_repo_path: &str) -> Result<Stats, Error> {
     let mut lang_name_occurrences: Vec<String> = vec![];
     let mut num_file_changes: u32 = 0;
     let mut num_commits_to_master: u32 = 0;
+    let mut num_prs: u32 = 0;
 
     revwalk.for_each(|step| {
         let oid = step.unwrap();
         let commit = repo.find_commit(oid).unwrap();
 
         if let Ok(_c) = repo.find_commit(oid) { num_commits_to_master += 1 }
+
+        if let Some(_pr_umber) = extract_pr_from_commit_message(commit.summary().unwrap()) {
+            num_prs += 1;
+        }
 
         // record changes by time
         {
@@ -186,17 +191,6 @@ pub fn walk_entire_history(git_repo_path: &str) -> Result<Stats, Error> {
     let after_counts = Instant::now();
     println!("Processing counts: {:?}", after_counts.duration_since(before_counts));
 
-    revwalk = repo.revwalk()?;
-    revwalk.push_head()?;
-    let num_prs= revwalk.map(|step| {
-        let oid = step.unwrap();
-        let commit = repo.find_commit(oid).unwrap();
-        match extract_pr_from_commit_message(commit.summary().unwrap()) {
-            Some(_pr_number) => 1,
-            None => 0
-        }
-    }).sum();
-
     Ok(Stats::new(num_commits_to_master,
                   num_prs,
                   num_file_changes,
@@ -206,4 +200,49 @@ pub fn walk_entire_history(git_repo_path: &str) -> Result<Stats, Error> {
                   commits_by_day_of_week,
                   changes_by_component
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_extract_component_name_from_diff_summary() {
+        let r = extract_component_name_from_filename(&"component-a/src/test/java/Thing.java".to_owned());
+        assert!(r.is_some());
+        assert_eq!(r.unwrap(), "component-a");
+    }
+
+    #[test]
+    fn test_extract_pr_from_commit_message() {
+        let message = &"VGR-XXXX - Lorem ipsum dolor sit amet, consectetur adipiscing elit. (#4729)";
+        let pr_number = extract_pr_from_commit_message(message);
+        assert_eq!("4729", pr_number.unwrap());
+    }
+
+    #[test]
+    fn test_extract_language_from_diff_summary() {
+        let r = extract_language_from_filename(&"component-a/src/test/java/Thing.java".to_owned());
+        assert!(r.is_some());
+        assert_eq!(r.unwrap(), "java");
+    }
+
+    // #[test]
+    // fn test_convert_git_time_to_datetime() {
+    //
+    // }
+
+    #[test]
+    fn test_day() {
+        let utc: DateTime<Utc> = Utc::now();
+        println!("{:?}", utc.weekday())
+    }
+
+    #[test]
+    fn test_count_by_key() {
+        let items = vec!["a", "a", "b", "c", "c", "d"];
+        let m = items.iter().count_by_key(|i| i.to_owned().to_owned());
+        let count = m.get("a").unwrap().to_owned();
+        assert_eq!(count, 2);
+    }
 }
