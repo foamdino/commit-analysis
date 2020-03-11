@@ -96,6 +96,7 @@ pub fn walk_entire_history(git_repo_path: &str) -> Result<Stats, Error> {
     let mut num_file_changes: u32 = 0;
     let mut num_commits_to_master: u32 = 0;
     let mut num_prs: u32 = 0;
+    let mut missing_prs: u32 = 0;
 
     revwalk.for_each(|step| {
         let oid = step.unwrap();
@@ -107,6 +108,8 @@ pub fn walk_entire_history(git_repo_path: &str) -> Result<Stats, Error> {
 
             if let Some(_pr_number) = extract_pr_from_commit_message(commit.summary().unwrap()) {
                 num_prs += 1;
+            } else {
+                missing_prs += 1;
             }
 
             // record changes by time
@@ -196,6 +199,7 @@ pub fn walk_entire_history(git_repo_path: &str) -> Result<Stats, Error> {
 
     Ok(Stats::new(num_commits_to_master,
                   num_prs,
+                  missing_prs,
                   num_file_changes,
                   component_stats,
                   lang_stats,
