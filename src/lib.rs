@@ -99,69 +99,72 @@ pub fn walk_entire_history(git_repo_path: &str) -> Result<Stats, Error> {
 
     revwalk.for_each(|step| {
         let oid = step.unwrap();
-        let commit = repo.find_commit(oid).unwrap();
 
-        if let Ok(_c) = repo.find_commit(oid) { num_commits_to_master += 1 }
+        // let commit = repo.find_commit(oid).unwrap();
 
-        if let Some(_pr_umber) = extract_pr_from_commit_message(commit.summary().unwrap()) {
-            num_prs += 1;
-        }
+        if let Ok(commit) = repo.find_commit(oid) {
+            num_commits_to_master += 1;
 
-        // record changes by time
-        {
-            let dt = convert_git_time_to_datetime(&commit.author().when());
-            let year = dt.year().to_string();
-            let month = (dt.month() - 1) as usize;
-            let month_vec = commits_by_month.entry(year).or_insert_with(|| vec![0; 12]);
-            month_vec[month] += 1;
-            let commit_day = format!("{:?}", dt.weekday());
-            *commits_by_day_of_week.entry(commit_day).or_insert(0) += 1;
-        }
+            if let Some(_pr_number) = extract_pr_from_commit_message(commit.summary().unwrap()) {
+                num_prs += 1;
+            }
 
-        let a = if commit.parents().len() == 1 {
-            let parent = commit.parent(0).unwrap();
-            Some(parent.tree().unwrap())
-        } else {
-            None
-        };
-        let b = commit.tree().unwrap();
-        let diff = repo.diff_tree_to_tree(a.as_ref(), Some(&b), None).unwrap();
-        let ds = diff.deltas();
+            // record changes by time
+            {
+                let dt = convert_git_time_to_datetime(&commit.author().when());
+                let year = dt.year().to_string();
+                let month = (dt.month() - 1) as usize;
+                let month_vec = commits_by_month.entry(year).or_insert_with(|| vec![0; 12]);
+                month_vec[month] += 1;
+                let commit_day = format!("{:?}", dt.weekday());
+                *commits_by_day_of_week.entry(commit_day).or_insert(0) += 1;
+            }
 
-        let mut added = 0;
-        let mut deleted = 0;
-        let mut modified = 0;
+            let a = if commit.parents().len() == 1 {
+                let parent = commit.parent(0).unwrap();
+                Some(parent.tree().unwrap())
+            } else {
+                None
+            };
+            let b = commit.tree().unwrap();
+            let diff = repo.diff_tree_to_tree(a.as_ref(), Some(&b), None).unwrap();
+            let ds = diff.deltas();
 
-        let mut local_langs: HashSet<String> = HashSet::new();
-        let mut local_comps: HashSet<String> = HashSet::new();
-        for d in ds {
+            let mut added = 0;
+            let mut deleted = 0;
+            let mut modified = 0;
 
-            let file_name = d.new_file().path().unwrap().to_str().unwrap().to_owned();
-            // we should only consider files in the diff which are changes to the component code
-            if !file_name.starts_with("master") && file_name.contains('/') {
-                num_file_changes += 1;
-                let comp_name= extract_component_name_from_filename(&file_name).unwrap_or_else(|| "unknown".to_owned());
-                let lang_name = extract_language_from_filename(&file_name).unwrap_or_else(|| "unknown".to_owned());
+            let mut local_langs: HashSet<String> = HashSet::new();
+            let mut local_comps: HashSet<String> = HashSet::new();
+            for d in ds {
 
-                // only count the language once / diff
-                if !local_langs.contains(&lang_name) && INTERESTING_LANGS.contains(&lang_name.as_str()) {
-                    local_langs.insert(lang_name.clone());
-                    lang_name_occurrences.push(lang_name);
-                }
+                let file_name = d.new_file().path().unwrap().to_str().unwrap().to_owned();
+                // we should only consider files in the diff which are changes to the component code
+                if !file_name.starts_with("master") && file_name.contains('/') {
+                    num_file_changes += 1;
+                    let comp_name= extract_component_name_from_filename(&file_name).unwrap_or_else(|| "unknown".to_owned());
+                    let lang_name = extract_language_from_filename(&file_name).unwrap_or_else(|| "unknown".to_owned());
 
-                // only count first occurrence of component / diff
-                if !local_comps.contains(&comp_name) {
-                    local_comps.insert(comp_name.clone());
-
-                    match d.status() {
-                        Delta::Added => added+=1,
-                        Delta::Deleted => deleted+=1,
-                        Delta::Modified => modified+=1,
-                        _ => ()
+                    // only count the language once / diff
+                    if !local_langs.contains(&lang_name) && INTERESTING_LANGS.contains(&lang_name.as_str()) {
+                        local_langs.insert(lang_name.clone());
+                        lang_name_occurrences.push(lang_name);
                     }
-                    let changes = CommitChanges::new(added, deleted, modified);
-                    *changes_by_component.entry(comp_name.clone()).or_insert(EMPTY_CHANGES) += changes;
-                    component_name_occurrences.push(comp_name);
+
+                    // only count first occurrence of component / diff
+                    if !local_comps.contains(&comp_name) {
+                        local_comps.insert(comp_name.clone());
+
+                        match d.status() {
+                            Delta::Added => added+=1,
+                            Delta::Deleted => deleted+=1,
+                            Delta::Modified => modified+=1,
+                            _ => ()
+                        }
+                        let changes = CommitChanges::new(added, deleted, modified);
+                        *changes_by_component.entry(comp_name.clone()).or_insert(EMPTY_CHANGES) += changes;
+                        component_name_occurrences.push(comp_name);
+                    }
                 }
             }
         }
