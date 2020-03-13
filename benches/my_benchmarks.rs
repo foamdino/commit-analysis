@@ -167,16 +167,6 @@ fn bench_revwalk(c: &mut Criterion) {
                      move |b| b.iter(|| revwalk()));
 }
 
-fn bench_pr_from_commit_message_alternative(c: &mut Criterion) {
-    c.bench_function("extract pr from commit message without lazy_static",
-                     |b| b.iter(|| extract_pr_from_commit_message_alternative(black_box(&"VGR-XXXX - Lorem ipsum dolor sit amet, consectetur adipiscing elit. (#4729)"))));
-}
-
-fn bench_pr_from_commit_message(c: &mut Criterion) {
-    c.bench_function("extract pr from commit message with lazy_static",
-                     |b| b.iter(|| commit_analysis::extract_pr_from_commit_message(black_box(&"VGR-XXXX - Lorem ipsum dolor sit amet, consectetur adipiscing elit. (#4729)"))));
-}
-
 fn bench_extract_names_and_sum_v1(c: &mut Criterion) {
     let mut diff_files = vec![];
     let repo = Repository::open(".").unwrap();

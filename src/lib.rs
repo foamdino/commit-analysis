@@ -1,6 +1,4 @@
 #[macro_use]
-extern crate lazy_static;
-#[macro_use]
 extern crate serde_derive;
 extern crate serde_json;
 extern crate chrono;
@@ -11,8 +9,6 @@ use std::time::Instant;
 use std::thread;
 use std::hash::Hash;
 use std::cmp::Eq;
-
-use regex::Regex;
 use git2::{Repository, Error, Time, Delta};
 use chrono::{DateTime, Utc, Datelike};
 use chrono::offset::TimeZone;
@@ -25,11 +21,9 @@ pub use stats::Stats;
 
 const PATH_SPLIT: &str = "/";
 const EXT_SPLIT: &str = ".";
+const COMMIT_MESSAGE_START: &str = "(#";
 const EMPTY_CHANGES: CommitChanges = CommitChanges::new(0 as u32, 0 as u32, 0 as u32);
 const INTERESTING_LANGS: [&str; 15] = ["java", "js", "css", "clj", "scala", "kt", "groovy", "j2", "properties", "sh", "xsd", "xml", "yaml", "yml", "py"];
-lazy_static! {
-    static ref PR_RE: Regex = Regex::new(r"\(#(\d+)\)").unwrap();
-}
 
 pub trait CountBy : Iterator {
     fn count_by_key<K, V, FA>(self, f: FA) -> HashMap<K, u32>
@@ -55,12 +49,6 @@ pub trait CountBy : Iterator {
 }
 
 impl<T: Iterator> CountBy for T {}
-
-pub fn extract_pr_from_commit_message(commit_message: &str) -> Option<&str> {
-    PR_RE.captures(commit_message).map(|pr_number| {
-        pr_number.get(1).unwrap().as_str()
-    })
-}
 
 pub fn extract_component_name_from_filename(filename: &str) -> Option<String> {
     let name_parts = filename.split(PATH_SPLIT).collect::<Vec<&str>>();
@@ -100,18 +88,14 @@ pub fn walk_entire_history(git_repo_path: &str) -> Result<Stats, Error> {
 
     revwalk.for_each(|step| {
         let oid = step.unwrap();
-
-        // let commit = repo.find_commit(oid).unwrap();
-
         if let Ok(commit) = repo.find_commit(oid) {
             num_commits_to_master += 1;
 
-            if let Some(_pr_number) = extract_pr_from_commit_message(commit.summary().unwrap()) {
+            if commit.summary().unwrap().contains(COMMIT_MESSAGE_START) {
                 num_prs += 1;
             } else {
                 missing_prs += 1;
             }
-
             // record changes by time
             {
                 let dt = convert_git_time_to_datetime(&commit.author().when());
@@ -221,23 +205,11 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_pr_from_commit_message() {
-        let message = &"VGR-XXXX - Lorem ipsum dolor sit amet, consectetur adipiscing elit. (#4729)";
-        let pr_number = extract_pr_from_commit_message(message);
-        assert_eq!("4729", pr_number.unwrap());
-    }
-
-    #[test]
     fn test_extract_language_from_diff_summary() {
         let r = extract_language_from_filename(&"component-a/src/test/java/Thing.java".to_owned());
         assert!(r.is_some());
         assert_eq!(r.unwrap(), "java");
     }
-
-    // #[test]
-    // fn test_convert_git_time_to_datetime() {
-    //
-    // }
 
     #[test]
     fn test_day() {
