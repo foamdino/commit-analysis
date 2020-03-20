@@ -1,7 +1,7 @@
 [package]
 name = "commit-analysis"
 version = "0.1.0"
-authors = ["Kevin Jackson <kevin.jackson@thehutgroup.com>"]
+authors = ["Kev Jackson <foamdino@gmail.com>"]
 edition = "2018"
 
 [dependencies]
